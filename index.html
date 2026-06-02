@@ -23,47 +23,60 @@
     <ul id="notes-list"></ul>
 
     <script>
-        // ⚠️ ЗАМЕНИ ЭТИ ДВЕ СТРОКИ НА СВОИ ЗНАЧЕНИЯ
-        const GIST_ID = '831e1765568d85619943cc93638c53e0';   // ← пример, вставь свой ID
-        const GIST_TOKEN = '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'; // ← вставь свой токен
+    const GIST_ID = '831e1765568d85619943cc93638c53e0';    // замени
+    const GIST_TOKEN = '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'; // замени
 
-        const API_URL = `https://api.github.com/gists/${GIST_ID}`;
+    const API_URL = `https://api.github.com/gists/${GIST_ID}`;
 
-        async function loadNotes() {
-            try {
-                const res = await fetch(API_URL, {
-                    headers: { Authorization: `token ${GIST_TOKEN}` }
-                });
-                const gist = await res.json();
-                const file = gist.files['db.json'];
-                if (!file) return;
-                const data = JSON.parse(file.content);
-                const notes = data.notes || [];
-                const list = document.getElementById('notes-list');
-                list.innerHTML = notes.map((note, index) => `
-                    <li>
-                        <span class="note-text" onclick="editNote(${index}, '${escapeHtml(note)}')">${escapeHtml(note)}</span>
-                        <button onclick="deleteNote(${index})">Удалить</button>
-                    </li>
-                `).join('');
-            } catch (err) {
-                alert('Ошибка загрузки заметок');
-            }
-        }
-
-        function escapeHtml(text) {
-            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        }
-
-        async function updateNotes(modifyFn) {
+    async function loadNotes() {
+        try {
             const res = await fetch(API_URL, {
                 headers: { Authorization: `token ${GIST_TOKEN}` }
             });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(`HTTP ${res.status}: ${err.message}`);
+            }
             const gist = await res.json();
-            const file = gist.files['db.json'];
-            const data = JSON.parse(file.content);
+            // Проверяем, что файл db.json существует
+            if (!gist.files || !gist.files['db.json']) {
+                throw new Error('В gist нет файла db.json! Проверь имя файла.');
+            }
+            const data = JSON.parse(gist.files['db.json'].content);
+            const notes = data.notes || [];
+            const list = document.getElementById('notes-list');
+            list.innerHTML = notes.map((note, index) => `
+                <li>
+                    <span class="note-text" onclick="editNote(${index}, '${escapeHtml(note)}')">${escapeHtml(note)}</span>
+                    <button onclick="deleteNote(${index})">Удалить</button>
+                </li>
+            `).join('');
+        } catch (err) {
+            alert('Ошибка загрузки: ' + err.message);
+            console.error(err);
+        }
+    }
+
+    function escapeHtml(text) {
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function updateNotes(modifyFn) {
+        try {
+            const res = await fetch(API_URL, {
+                headers: { Authorization: `token ${GIST_TOKEN}` }
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(`HTTP ${res.status}: ${err.message}`);
+            }
+            const gist = await res.json();
+            if (!gist.files || !gist.files['db.json']) {
+                throw new Error('В gist нет файла db.json!');
+            }
+            const data = JSON.parse(gist.files['db.json'].content);
             modifyFn(data.notes || []);
-            await fetch(API_URL, {
+            const updateRes = await fetch(API_URL, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -73,30 +86,38 @@
                     files: { 'db.json': { content: JSON.stringify(data) } }
                 })
             });
-            loadNotes();
-        }
-
-        document.getElementById('note-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('note-input');
-            const text = input.value.trim();
-            if (!text) return;
-            await updateNotes(notes => notes.push(text));
-            input.value = '';
-        });
-
-        async function deleteNote(index) {
-            await updateNotes(notes => notes.splice(index, 1));
-        }
-
-        async function editNote(index, oldText) {
-            const newText = prompt('Изменить заметку:', oldText);
-            if (newText !== null && newText.trim() !== '') {
-                await updateNotes(notes => { notes[index] = newText.trim(); });
+            if (!updateRes.ok) {
+                const err = await updateRes.json();
+                throw new Error(`Ошибка сохранения: ${err.message}`);
             }
+            loadNotes();
+        } catch (err) {
+            alert('Ошибка: ' + err.message);
+            console.error(err);
         }
+    }
 
-        loadNotes();
-    </script>
+    document.getElementById('note-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('note-input');
+        const text = input.value.trim();
+        if (!text) return;
+        await updateNotes(notes => notes.push(text));
+        input.value = '';
+    });
+
+    async function deleteNote(index) {
+        await updateNotes(notes => notes.splice(index, 1));
+    }
+
+    async function editNote(index, oldText) {
+        const newText = prompt('Изменить заметку:', oldText);
+        if (newText !== null && newText.trim() !== '') {
+            await updateNotes(notes => { notes[index] = newText.trim(); });
+        }
+    }
+
+    loadNotes();
+</script>
 </body>
 </html>
