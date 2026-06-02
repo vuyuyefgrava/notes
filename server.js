@@ -1,8 +1,8 @@
 // server.js
 import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 
-// Простая база данных в памяти (Map)
-const notes = new Map(); // ключ: id, значение: текст заметки
+// Хранилище заметок в памяти (обычный Map)
+const notes = new Map();
 
 async function handleRequest(req) {
   const url = new URL(req.url);
@@ -23,7 +23,7 @@ async function handleRequest(req) {
   }
 
   try {
-    // GET /notes — список всех заметок
+    // GET /notes — список заметок
     if (req.method === "GET" && url.pathname === "/notes") {
       const result = [];
       for (const [id, text] of notes) {
@@ -32,7 +32,7 @@ async function handleRequest(req) {
       return new Response(JSON.stringify(result), { headers });
     }
 
-    // POST /notes — добавить заметку (ожидает { text: "..." })
+    // POST /notes — добавить заметку
     if (req.method === "POST" && url.pathname === "/notes") {
       const { text } = await req.json();
       if (!text) {
@@ -43,7 +43,7 @@ async function handleRequest(req) {
       return new Response(JSON.stringify({ id, text }), { status: 201, headers });
     }
 
-    // DELETE /notes?id=... — удалить заметку по id
+    // DELETE /notes?id=... — удалить заметку
     if (req.method === "DELETE" && url.pathname === "/notes") {
       const id = url.searchParams.get("id");
       if (!id || !notes.has(id)) {
