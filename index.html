@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мои заметки</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 2rem auto; }
+        form { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        input { flex: 1; padding: 0.5rem; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 0.5rem; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; }
+        button { cursor: pointer; padding: 0.3rem 0.8rem; }
+        .note-text { cursor: pointer; flex: 1; }
+    </style>
+</head>
+<body>
+    <h1>📌 Мои заметки</h1>
+    <form id="note-form">
+        <input type="text" id="note-input" placeholder="Новая заметка..." required>
+        <button type="submit">Добавить</button>
+    </form>
+    <ul id="notes-list"></ul>
+
+    <script>
+        // ⚠️ ЗАМЕНИ ЭТИ ДВЕ СТРОКИ НА СВОИ ЗНАЧЕНИЯ
+        const GIST_ID = '831e1765568d85619943cc93638c53e0';   // ← пример, вставь свой ID
+        const GIST_TOKEN = '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'; // ← вставь свой токен
+
+        const API_URL = `https://api.github.com/gists/${GIST_ID}`;
+
+        async function loadNotes() {
+            try {
+                const res = await fetch(API_URL, {
+                    headers: { Authorization: `token ${GIST_TOKEN}` }
+                });
+                const gist = await res.json();
+                const file = gist.files['db.json'];
+                if (!file) return;
+                const data = JSON.parse(file.content);
+                const notes = data.notes || [];
+                const list = document.getElementById('notes-list');
+                list.innerHTML = notes.map((note, index) => `
+                    <li>
+                        <span class="note-text" onclick="editNote(${index}, '${escapeHtml(note)}')">${escapeHtml(note)}</span>
+                        <button onclick="deleteNote(${index})">Удалить</button>
+                    </li>
+                `).join('');
+            } catch (err) {
+                alert('Ошибка загрузки заметок');
+            }
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        async function updateNotes(modifyFn) {
+            const res = await fetch(API_URL, {
+                headers: { Authorization: `token ${GIST_TOKEN}` }
+            });
+            const gist = await res.json();
+            const file = gist.files['db.json'];
+            const data = JSON.parse(file.content);
+            modifyFn(data.notes || []);
+            await fetch(API_URL, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `token ${GIST_TOKEN}`
+                },
+                body: JSON.stringify({
+                    files: { 'db.json': { content: JSON.stringify(data) } }
+                })
+            });
+            loadNotes();
+        }
+
+        document.getElementById('note-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('note-input');
+            const text = input.value.trim();
+            if (!text) return;
+            await updateNotes(notes => notes.push(text));
+            input.value = '';
+        });
+
+        async function deleteNote(index) {
+            await updateNotes(notes => notes.splice(index, 1));
+        }
+
+        async function editNote(index, oldText) {
+            const newText = prompt('Изменить заметку:', oldText);
+            if (newText !== null && newText.trim() !== '') {
+                await updateNotes(notes => { notes[index] = newText.trim(); });
+            }
+        }
+
+        loadNotes();
+    </script>
+</body>
+</html>
